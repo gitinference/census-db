@@ -27,13 +27,12 @@ class data_pull:
         if not os.path.exists(self.saving_dir + "external"):
             os.makedirs(self.saving_dir + "external")
 
-    def pull_states(self) -> None:
-        if os.path.exists(f"{self.saving_dir}external/geo-us-states.parquet"):
-            print("fille is available")
-        else:
+    def pull_states(self) -> gpd.GeoDataFrame:
+        if not os.path.exists(f"{self.saving_dir}external/geo-us-states.parquet"):
             download(
                 url="https://www2.census.gov/geo/tiger/TIGER2025/STATE/tl_2025_us_state.zip",
                 filename=f"{tempfile.gettempdir()}/geo-us-states.zip",
             )
             gdf = gpd.read_file(f"{tempfile.gettempdir()}/geo-us-states.zip")
             gdf.to_parquet(f"{self.saving_dir}external/geo-us-states.parquet")
+        return gpd.read_parquet(f"{self.saving_dir}external/geo-us-states.parquet")

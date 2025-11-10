@@ -8,6 +8,7 @@ dependencies = [
     "alembic>=1.17.1",
     "geopandas>=1.1.1",
     "jp-tools>=0.2.2",
+    "polars>=1.35.2",
     "pyarrow>=22.0.0",
     "sqlmodel>=0.0.27",
 ]
