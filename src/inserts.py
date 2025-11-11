@@ -1,7 +1,5 @@
 from .pull import data_pull
 import polars as pl
-from sqlmodel import create_engine, Session
-from .models import regions
 
 
 class data_inserts(data_pull):
@@ -12,7 +10,6 @@ class data_inserts(data_pull):
         log_file: str = "data_process.log",
     ):
         super().__init__(saving_dir, conn, log_file)
-        self.engine = create_engine(self.conn)
 
     def insert_states(self) -> None:
         gdf = self.pull_geos(
@@ -24,13 +21,28 @@ class data_inserts(data_pull):
             {
                 "REGION": "region_id",
                 "DIVISION": "division_id",
-                "STATEFP": "states_fips",
+                "STATEFP": "id",
                 "STUSPS": "name_abv",
                 "NAME": "name_full",
             }
         )
         df.write_database(
             table_name="states",
+            if_table_exists="append",
+            connection=self.conn,
+        )
+
+    def insert_county(self) -> None:
+        gdf = self.pull_geos(
+            url="https://www2.census.gov/geo/tiger/TIGER2025/COUNTY/tl_2025_us_county.zip",
+            filename=f"{self.saving_dir}external/geo-us-county.parquet",
+        )
+        df = pl.DataFrame(gdf[["STATEFP", "COUNTYFP", "NAME"]])
+        df = df.rename(
+            {"STATEFP": "state_id", "COUNTYFP": "id", "NAME": "name_full"}
+        ).select(pl.col("id", "state_id", "name_full"))
+        df.write_database(
+            table_name="county",
             if_table_exists="append",
             connection=self.conn,
         )
