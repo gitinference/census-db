@@ -1,5 +1,8 @@
+from src.pull import data_pull
+
+
 def main():
-    print("Hello from census-db!")
+    data_pull().pull_states()
 
 
 if __name__ == "__main__":

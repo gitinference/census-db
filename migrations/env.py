@@ -1,6 +1,6 @@
 from logging.config import fileConfig
 from sqlmodel import SQLModel
-from src.models import Book
+from src.models import states
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 

@@ -6,5 +6,22 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.17.1",
+    "duckdb>=1.4.1",
+    "geopandas>=1.1.1",
+    "jp-tools>=0.2.2",
+    "polars>=1.35.2",
+    "pyarrow>=22.0.0",
     "sqlmodel>=0.0.27",
+]
+
+[dependency-groups]
+dev = [
+    "cairosvg>=2.8.2",
+    "jupyter>=1.1.1",
+    "jupytext>=1.18.1",
+    "kaleido>=1.2.0",
+    "pnglatex>=1.1",
+    "pre-commit>=4.4.0",
+    "pynvim>=0.6.0",
+    "pyperclip>=1.11.0",
 ]
