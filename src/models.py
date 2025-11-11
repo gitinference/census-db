@@ -26,5 +26,12 @@ class states(SQLModel, table=True):
 
 class county(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
-    state_id: int = Field(default=None, foreign_key="states.id", primary_key=True)
+    state_id: int = Field(default=None, foreign_key="states.id")
+    name_full: str
+
+
+class track(SQLModel, table=True):
+    id: int = Field(default=None, primary_key=True)
+    county_id: int = Field(default=None, foreign_key="county.id")
+    state_id: int = Field(default=None, foreign_key="states.id")
     name_full: str

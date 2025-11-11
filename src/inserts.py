@@ -6,10 +6,10 @@ class data_inserts(data_pull):
     def __init__(
         self,
         saving_dir: str = "data/",
-        conn: str = "sqlite:///database.db",
+        db_file: str = "sqlite:///database.db",
         log_file: str = "data_process.log",
     ):
-        super().__init__(saving_dir, conn, log_file)
+        super().__init__(saving_dir, db_file, log_file)
 
     def insert_states(self) -> None:
         gdf = self.pull_geos(
@@ -29,7 +29,7 @@ class data_inserts(data_pull):
         df.write_database(
             table_name="states",
             if_table_exists="append",
-            connection=self.conn,
+            connection=self.db_file,
         )
 
     def insert_county(self) -> None:
@@ -37,15 +37,31 @@ class data_inserts(data_pull):
             url="https://www2.census.gov/geo/tiger/TIGER2025/COUNTY/tl_2025_us_county.zip",
             filename=f"{self.saving_dir}external/geo-us-county.parquet",
         )
-        df = pl.DataFrame(gdf[["STATEFP", "COUNTYFP", "NAME"]])
-        df = df.rename(
-            {"STATEFP": "state_id", "COUNTYFP": "id", "NAME": "name_full"}
-        ).select(pl.col("id", "state_id", "name_full"))
+        df = pl.DataFrame(gdf[["GEOID", "STATEFP", "NAME"]])
+        df = df.rename({"STATEFP": "state_id", "GEOID": "id", "NAME": "name_full"})
         df.write_database(
             table_name="county",
             if_table_exists="append",
-            connection=self.conn,
+            connection=self.db_file,
         )
+
+    def insert_track(self) -> None:
+        states = (
+            self.conn.execute("SELECT id FROM sqlite_db.states;").df()["id"].tolist()
+        )
+        for state in states:
+            gdf = self.pull_geos(
+                url=f"https://www2.census.gov/geo/tiger/TIGER2025/TRACT/tl_2025_{str(state).zfill(2)}_tract.zip",
+                filename=f"{self.saving_dir}external/geo-us-{str(state).zfill(2)}-tack.parquet",
+            )
+            gdf["county_id"] = gdf["STATEFP"] + gdf["COUNTYFP"]
+            df = pl.DataFrame(gdf[["GEOID", "county_id", "STATEFP", "NAME"]])
+            df = df.rename({"GEOID": "id", "STATEFP": "state_id", "NAME": "name_full"})
+            df.write_database(
+                table_name="track",
+                if_table_exists="append",
+                connection=self.db_file,
+            )
 
     def insert_regions(self) -> None:
         df = pl.DataFrame(
@@ -56,7 +72,7 @@ class data_inserts(data_pull):
             }
         )
         df.write_database(
-            table_name="regions", if_table_exists="append", connection=self.conn
+            table_name="regions", if_table_exists="append", connection=self.db_file
         )
 
     def insert_divisions(self) -> None:
@@ -89,5 +105,5 @@ class data_inserts(data_pull):
             }
         )
         df.write_database(
-            table_name="divisions", if_table_exists="append", connection=self.conn
+            table_name="divisions", if_table_exists="append", connection=self.db_file
         )

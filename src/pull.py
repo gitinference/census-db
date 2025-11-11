@@ -1,4 +1,5 @@
 from jp_tools import download
+import duckdb
 import geopandas as gpd
 import tempfile
 import logging
@@ -9,11 +10,14 @@ class data_pull:
     def __init__(
         self,
         saving_dir: str = "data/",
-        conn: str = "sqlite:///database.db",
+        db_file: str = "sqlite:///database.db",
         log_file: str = "data_process.log",
     ):
         self.saving_dir = saving_dir
-        self.conn = conn
+        self.db_file = db_file
+        self.conn = duckdb.connect()
+        self.conn.execute("LOAD sqlite;")
+        self.conn.execute(f"ATTACH '{self.db_file[10:]}' AS sqlite_db (TYPE sqlite);")
 
         logging.basicConfig(
             level=logging.INFO,
