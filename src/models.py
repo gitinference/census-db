@@ -56,7 +56,7 @@ class required_table(SQLModel, table=True):
     name: str
 
 
-class dataset_type(SQLModel, table=True):
+class type_table(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
     type: str
 
@@ -78,26 +78,13 @@ class variable_table(SQLModel, table=True):
 
 class variable_interm(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
-    interm_id: int
+    url_id: int = Field(default=None, foreign_key="urls_table.id")
+    geo_id: int = Field(default=None, foreign_key="geo_table.id")
     year_id: int = Field(default=None, foreign_key="year_table.id")
     var_id: int = Field(default=None, foreign_key="variable_table.id")
 
 
-class year_interm(SQLModel, table=True):
+class urls_table(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
-    year_id: int = Field(default=None, foreign_key="year_table.id")
-    interm_id: int
-
-
-class geo_interm(SQLModel, table=True):
-    id: int = Field(default=None, primary_key=True)
-    geo_id: int = Field(default=None, foreign_key="geo_table.id")
-    interm_id: int
-
-
-class data(SQLModel, table=True):
-    id: int = Field(default=None, primary_key=True)
-    year_interm_id: int = Field(default=None, foreign_key="year_interm.interm_id")
-    type_id: int = Field(default=None, foreign_key="dataset_type.id")
-    geo_interm_id: int = Field(default=None, foreign_key="geo_interm.interm_id")
-    var_interm_id: int = Field(default=None, foreign_key="variable_interm.interm_id")
+    title: str
+    api_url: str

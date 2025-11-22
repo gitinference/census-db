@@ -1,8 +1,8 @@
 """added data tables
 
-Revision ID: 83bda86e2b2f
-Revises: 8e535d5d6953
-Create Date: 2025-11-11 09:02:55.977746
+Revision ID: 86428097f597
+Revises: 
+Create Date: 2025-11-22 19:32:36.919016
 
 """
 from typing import Sequence, Union
@@ -13,8 +13,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '83bda86e2b2f'
-down_revision: Union[str, Sequence[str], None] = '8e535d5d6953'
+revision: str = '86428097f597'
+down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -25,11 +25,6 @@ def upgrade() -> None:
     op.create_table('concept_table',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_table('dataset_type',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('type', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('geo_table',
@@ -43,9 +38,26 @@ def upgrade() -> None:
     sa.Column('predicate_type', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_table('regions',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('name_abv', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.Column('name_full', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.PrimaryKeyConstraint('id')
+    )
     op.create_table('required_table',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_table('type_table',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('type', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_table('urls_table',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('title', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.Column('api_url', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('year_table',
@@ -53,11 +65,12 @@ def upgrade() -> None:
     sa.Column('year', sa.Integer(), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_table('geo_interm',
+    op.create_table('divisions',
     sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('geo_id', sa.Integer(), nullable=False),
-    sa.Column('interm_id', sa.Integer(), nullable=False),
-    sa.ForeignKeyConstraint(['geo_id'], ['geo_table.id'], ),
+    sa.Column('region_id', sa.Integer(), nullable=False),
+    sa.Column('name_abv', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.Column('name_full', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.ForeignKeyConstraint(['region_id'], ['regions.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('variable_table',
@@ -73,32 +86,42 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['required_id'], ['required_table.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_table('year_interm',
+    op.create_table('states',
     sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('year_id', sa.Integer(), nullable=False),
-    sa.Column('interm_id', sa.Integer(), nullable=False),
-    sa.ForeignKeyConstraint(['year_id'], ['year_table.id'], ),
+    sa.Column('region_id', sa.Integer(), nullable=False),
+    sa.Column('division_id', sa.Integer(), nullable=False),
+    sa.Column('name_abv', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.Column('name_full', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.ForeignKeyConstraint(['division_id'], ['divisions.id'], ),
+    sa.ForeignKeyConstraint(['region_id'], ['regions.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('variable_interm',
     sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('interm_id', sa.Integer(), nullable=False),
+    sa.Column('url_id', sa.Integer(), nullable=False),
+    sa.Column('geo_id', sa.Integer(), nullable=False),
     sa.Column('year_id', sa.Integer(), nullable=False),
     sa.Column('var_id', sa.Integer(), nullable=False),
+    sa.ForeignKeyConstraint(['geo_id'], ['geo_table.id'], ),
+    sa.ForeignKeyConstraint(['url_id'], ['urls_table.id'], ),
     sa.ForeignKeyConstraint(['var_id'], ['variable_table.id'], ),
     sa.ForeignKeyConstraint(['year_id'], ['year_table.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_table('data',
+    op.create_table('county',
     sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('year_interm_id', sa.Integer(), nullable=False),
-    sa.Column('type_id', sa.Integer(), nullable=False),
-    sa.Column('geo_interm_id', sa.Integer(), nullable=False),
-    sa.Column('var_interm_id', sa.Integer(), nullable=False),
-    sa.ForeignKeyConstraint(['geo_interm_id'], ['geo_interm.interm_id'], ),
-    sa.ForeignKeyConstraint(['type_id'], ['dataset_type.id'], ),
-    sa.ForeignKeyConstraint(['var_interm_id'], ['variable_interm.interm_id'], ),
-    sa.ForeignKeyConstraint(['year_interm_id'], ['year_interm.interm_id'], ),
+    sa.Column('state_id', sa.Integer(), nullable=False),
+    sa.Column('name_full', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.ForeignKeyConstraint(['state_id'], ['states.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_table('track',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('county_id', sa.Integer(), nullable=False),
+    sa.Column('state_id', sa.Integer(), nullable=False),
+    sa.Column('name_full', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.ForeignKeyConstraint(['county_id'], ['county.id'], ),
+    sa.ForeignKeyConstraint(['state_id'], ['states.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     # ### end Alembic commands ###
@@ -107,15 +130,18 @@ def upgrade() -> None:
 def downgrade() -> None:
     """Downgrade schema."""
     # ### commands auto generated by Alembic - please adjust! ###
-    op.drop_table('data')
+    op.drop_table('track')
+    op.drop_table('county')
     op.drop_table('variable_interm')
-    op.drop_table('year_interm')
+    op.drop_table('states')
     op.drop_table('variable_table')
-    op.drop_table('geo_interm')
+    op.drop_table('divisions')
     op.drop_table('year_table')
+    op.drop_table('urls_table')
+    op.drop_table('type_table')
     op.drop_table('required_table')
+    op.drop_table('regions')
     op.drop_table('predicate_table')
     op.drop_table('geo_table')
-    op.drop_table('dataset_type')
     op.drop_table('concept_table')
     # ### end Alembic commands ###
