@@ -86,5 +86,5 @@ class variable_interm(SQLModel, table=True):
 
 class urls_table(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
-    title: str
+    dataset: str
     api_url: str

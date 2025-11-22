@@ -1,9 +1,12 @@
-from jp_tools import download
-import duckdb
-import geopandas as gpd
-import tempfile
 import logging
 import os
+import tempfile
+
+import duckdb
+import geopandas as gpd
+import polars as pl
+import requests
+from jp_tools import download
 
 
 class data_pull:
@@ -43,3 +46,19 @@ class data_pull:
             gdf = gpd.read_file(temp_filename)
             gdf.to_parquet(filename)
         return gpd.read_parquet(filename)
+
+    def pull_urls(self) -> pl.DataFrame:
+        base = "https://api.census.gov/data"
+        results = requests.get(base).json()
+        df = pl.DataFrame(results.get("dataset"))
+
+        df = df.with_columns(dataset=pl.col("c_dataset").list.join(separator="-"))
+        df = df.select(
+            "dataset",
+            "c_vintage",
+            "c_variablesLink",
+            "c_geographyLink",
+            "title",
+            "identifier",
+        )
+        return df.sort(["dataset", "c_vintage"])

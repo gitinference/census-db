@@ -11,6 +11,8 @@ class data_inserts(data_pull):
     ):
         super().__init__(saving_dir, db_file, log_file)
 
+        self.data = self.pull_urls()
+
     def insert_states(self) -> None:
         gdf = self.pull_geos(
             url="https://www2.census.gov/geo/tiger/TIGER2025/STATE/tl_2025_us_state.zip",
@@ -106,4 +108,16 @@ class data_inserts(data_pull):
         )
         df.write_database(
             table_name="divisions", if_table_exists="append", connection=self.db_file
+        )
+
+    def insert_urls(self):
+        urls = self.data.unique(subset="dataset", maintain_order=True, keep="last")
+        urls = urls.with_columns(
+            api_url=pl.col("c_variablesLink")
+            .str.slice(32)
+            .str.replace("variables.json", ""),
+        ).select("dataset", "api_url")
+
+        urls.write_database(
+            table_name="urls_table", if_table_exists="append", connection=self.db_file
         )
