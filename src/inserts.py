@@ -110,7 +110,7 @@ class data_inserts(data_pull):
             table_name="divisions", if_table_exists="append", connection=self.db_file
         )
 
-    def insert_urls(self):
+    def insert_urls(self) -> None:
         urls = self.data.unique(subset="dataset", maintain_order=True, keep="last")
         urls = urls.with_columns(
             api_url=pl.col("c_variablesLink")
@@ -121,3 +121,42 @@ class data_inserts(data_pull):
         urls.write_database(
             table_name="urls_table", if_table_exists="append", connection=self.db_file
         )
+
+    def insert_years(self) -> None:
+        years = self.data.unique(subset="c_vintage", maintain_order=True, keep="last")
+        years = years.rename({"c_vintage": "year"})
+        years = years.with_columns(pl.col("year").fill_null(0))
+        years = years.select("year").sort("year")
+        years.write_database(
+            table_name="year_table", if_table_exists="append", connection=self.db_file
+        )
+
+    def get_years_id(self, year: int) -> int:
+        quary = self.conn.execute(f"""
+            SELECT *
+                FROM sqlite_db.year_table
+                WHERE year = {year};
+        """).fetchone()
+        if quary is None:
+            raise ValueError(f"No entry found for year {year}")
+        return int(quary[0])
+
+    def get_dataset_id(self, dataset: str) -> int:
+        quary = self.conn.execute(f"""
+            SELECT *
+                FROM sqlite_db.urls_table
+                WHERE api_url = '{dataset + "/"}';
+        """).fetchone()
+        if quary is None:
+            raise ValueError(f"No entry found for dataset {dataset}")
+        return int(quary[0])
+
+    def get_geo_id(self, geo_lv: str) -> int:
+        quary = self.conn.execute(f"""
+            SELECT *
+                FROM sqlite_db.geo_table
+                WHERE geo_lv = '{geo_lv + "/"}';
+        """).fetchone()
+        if quary is None:
+            return -1
+        return int(quary[0])
