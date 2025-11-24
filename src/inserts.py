@@ -244,31 +244,74 @@ class data_inserts(data_pull):
 
     def insert_var_full(self) -> None:
         for url in self.data.select("c_variablesLink").to_series().to_list():
-            df = pl.DataFrame(requests.get(url).json().get("fips"))
+            if url.split("/")[4] == "timeseries":
+                year_id = self.get_year_id(0)
+                dataset_id = self.get_dataset_id(
+                    "timeseries-" + "-".join(url.split("/")[5:-1])
+                )
+
+            else:
+                year_id = self.get_year_id(url.split("/")[4])
+                dataset_id = self.get_dataset_id("-".join(url.split("/")[5:-1]))
+
+            if self.check_geo_interm_id(dataset_id=dataset_id, year_id=year_id):
+                print(
+                    f"Skipping there is data in geo_iterm table for {year_id} {dataset_id}"
+                )
+                continue
+
+            print(url)
+            results = requests.get(url).json().get("fips")
+
+            try:
+                df = pl.DataFrame(results)
+            except SchemaError:
+                clean = [
+                    {k: v for k, v in rec.items() if k != "wildcard"} for rec in results
+                ]
+                df = pl.DataFrame(clean)
+
+            if df.is_empty():
+                self.insert_geo_interm(dataset_id=dataset_id, year_id=year_id, geo_id=1)
+                print("inserted empty data")
+                continue
+
+            if "geoLevelId" not in df.columns and "geoLevelDisplay" not in df.columns:
+                self.insert_geo_interm(dataset_id=dataset_id, year_id=year_id, geo_id=1)
+                print("insert mising data")
+                continue
+
+            if "geoLevelId" in df.columns:
+                df = df.with_columns(geoLevelDisplay=pl.col("geoLevelId"))
+
+            df = df.with_columns(pl.col("geoLevelDisplay").fill_null("-1"))
             for obs in (
-                df.select(pl.col("name") + "-" + pl.col("variablesDisplay"))
+                df.select(pl.col("name") + "_" + pl.col("geoLevelDisplay"))
                 .to_series()
                 .to_list()
             ):
-                var_name, var_desc = obs.split("-")
-                if self.get_var_id(var_name=var_name) == -1:
-                    self.insert_var_item(var_name=var_name, var_desc=var_name)
-                    print(f"inserted {var_desc} into db")
+                print(obs)
+                geo_desc, geo_lv = obs.split("_")
 
-                var_id = self.get_var_id(var_name=var_name)
-                year_id = self.get_year_id(url.split("/")[4])
-                dataset_id = self.get_dataset_id(url.split("/")[5])
+                if geo_lv == "-1":
+                    geo_lv = self.get_geo_desc(geo_name=geo_desc)
 
-                if self.check_var_interm_id(
-                    dataset_id=dataset_id, var_id=var_id, year_id=year_id
+                if self.get_geo_id(geo_lv=geo_lv) == -1:
+                    self.insert_geo_item(geo_desc=geo_desc, geo_lv=geo_lv)
+                    print(f"inserted {geo_desc} into db")
+
+                geo_id = self.get_geo_id(geo_lv=geo_lv)
+
+                if self.check_geo_interm_id(
+                    dataset_id=dataset_id, geo_id=geo_id, year_id=year_id
                 ):
-                    print(f"Entry {dataset_id}  {var_id} {year_id} is in dataset")
+                    print(f"Entry {dataset_id}  {geo_id} {year_id} is in dataset")
                     continue
                 else:
-                    self.insert_var_interm(
-                        dataset_id=dataset_id, var_id=var_id, year_id=year_id
+                    self.insert_geo_interm(
+                        dataset_id=dataset_id, geo_id=geo_id, year_id=year_id
                     )
-                    print(f"inserted {dataset_id}  {var_id} {year_id} succesfully")
+                    print(f"inserted {dataset_id}  {geo_id} {year_id} succesfully")
 
     def get_year_id(self, year: int) -> int:
         quary = self.conn.execute(f"""
@@ -340,12 +383,21 @@ class data_inserts(data_pull):
         else:
             return True
 
-    def check_var_interm_id(self, dataset_id: int, var_id: int, year_id: int) -> bool:
-        query = self.conn.execute(f"""
+    def check_var_interm_id(
+        self, dataset_id: int, year_id: int, var_id: int = -1
+    ) -> bool:
+        if var_id == -1:
+            query = self.conn.execute(f"""
+            SELECT *
+                FROM sqlite_db.var_interm
+                WHERE dataset_id={dataset_id} AND year_id={year_id};
+            """).fetchone()
+        else:
+            query = self.conn.execute(f"""
             SELECT *
                 FROM sqlite_db.var_interm
                 WHERE dataset_id={dataset_id} AND var_id={var_id} AND year_id={year_id};
-        """).fetchone()
+            """).fetchone()
         if query is None:
             return False
         else:
