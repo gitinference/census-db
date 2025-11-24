@@ -1,5 +1,6 @@
 from .pull import data_pull
 import requests
+from polars.exceptions import SchemaError
 import polars as pl
 
 
@@ -11,6 +12,7 @@ class data_inserts(data_pull):
         log_file: str = "data_process.log",
     ):
         super().__init__(saving_dir, db_file, log_file)
+        self.insert_geo_missing()
 
         self.data = self.pull_urls()
 
@@ -146,22 +148,73 @@ class data_inserts(data_pull):
                             (geo_name, geo_lv) VALUES ('{geo_desc}', '{geo_lv}');
                     """)
 
+    def insert_geo_missing(self) -> None:
+        query = self.conn.execute("""
+            SELECT * FROM sqlite_db.geo_table
+                WHERE id=1;
+        """).fetchone()
+        if query is None:
+            self.conn.execute("""
+                INSERT INTO sqlite_db.geo_table
+                    (id, geo_name, geo_lv) VALUES (1, 'missing','missing');
+            """)
+
     def insert_geo_full(self) -> None:
         for url in self.data.select("c_geographyLink").to_series().to_list():
-            df = pl.DataFrame(requests.get(url).json().get("fips"))
+            if url.split("/")[4] == "timeseries":
+                year_id = self.get_year_id(0)
+            else:
+                year_id = self.get_year_id(url.split("/")[4])
+
+            dataset_id = self.get_dataset_id("-".join(url.split("/")[5:-1]))
+
+            if self.check_geo_interm_id(dataset_id=dataset_id, year_id=year_id):
+                print(
+                    f"Skipping there is data in geo_iterm table for {year_id} {dataset_id}"
+                )
+                continue
+
+            print(url)
+            results = requests.get(url).json().get("fips")
+
+            try:
+                df = pl.DataFrame(results)
+            except SchemaError:
+                clean = [
+                    {k: v for k, v in rec.items() if k != "wildcard"} for rec in results
+                ]
+                df = pl.DataFrame(clean)
+
+            if df.is_empty():
+                self.insert_geo_interm(dataset_id=dataset_id, year_id=year_id, geo_id=1)
+                print("inserted empty data")
+                continue
+
+            if "geoLevelId" not in df.columns and "geoLevelDisplay" not in df.columns:
+                self.insert_geo_interm(dataset_id=dataset_id, year_id=year_id, geo_id=1)
+                print("insert mising data")
+                continue
+
+            if "geoLevelId" in df.columns:
+                df = df.with_columns(geoLevelDisplay=pl.col("geoLevelId"))
+
+            df = df.with_columns(pl.col("geoLevelDisplay").fill_null("-1"))
             for obs in (
-                df.select(pl.col("name") + "-" + pl.col("geoLevelDisplay"))
+                df.select(pl.col("name") + "_" + pl.col("geoLevelDisplay"))
                 .to_series()
                 .to_list()
             ):
-                geo_desc, geo_lv = obs.split("-")
+                print(obs)
+                geo_desc, geo_lv = obs.split("_")
+
+                if geo_lv == "-1":
+                    geo_lv = self.get_geo_desc(geo_name=geo_desc)
+
                 if self.get_geo_id(geo_lv=geo_lv) == -1:
                     self.insert_geo_item(geo_desc=geo_desc, geo_lv=geo_lv)
                     print(f"inserted {geo_desc} into db")
 
                 geo_id = self.get_geo_id(geo_lv=geo_lv)
-                year_id = self.get_year_id(url.split("/")[4])
-                dataset_id = self.get_dataset_id(url.split("/")[5])
 
                 if self.check_geo_interm_id(
                     dataset_id=dataset_id, geo_id=geo_id, year_id=year_id
@@ -228,7 +281,7 @@ class data_inserts(data_pull):
         query = self.conn.execute(f"""
             SELECT *
                 FROM sqlite_db.dataset_table
-                WHERE api_url = '{dataset + "/"}';
+                WHERE dataset = '{dataset}';
         """).fetchone()
         if query is None:
             raise ValueError(f"No entry found for dataset {dataset}")
@@ -244,6 +297,16 @@ class data_inserts(data_pull):
             return -1
         return int(query[0])
 
+    def get_geo_desc(self, geo_name: str) -> str:
+        query = self.conn.execute(f"""
+            SELECT *
+                FROM sqlite_db.geo_table
+                WHERE geo_name = '{geo_name}';
+        """).fetchone()
+        if query is None:
+            raise ValueError(f"NO entry with that value {geo_name}")
+        return query[2]
+
     def get_var_id(self, var_name: str) -> int:
         query = self.conn.execute(f"""
             SELECT *
@@ -254,12 +317,21 @@ class data_inserts(data_pull):
             return -1
         return int(query[0])
 
-    def check_geo_interm_id(self, dataset_id: int, geo_id: int, year_id: int) -> bool:
-        query = self.conn.execute(f"""
+    def check_geo_interm_id(
+        self, dataset_id: int, year_id: int, geo_id: int = -1
+    ) -> bool:
+        if geo_id == -1:
+            query = self.conn.execute(f"""
+            SELECT *
+                FROM sqlite_db.geo_interm
+                WHERE dataset_id={dataset_id} AND year_id={year_id};
+            """).fetchone()
+        else:
+            query = self.conn.execute(f"""
             SELECT *
                 FROM sqlite_db.geo_interm
                 WHERE dataset_id={dataset_id} AND geo_id={geo_id} AND year_id={year_id};
-        """).fetchone()
+            """).fetchone()
         if query is None:
             return False
         else:
