@@ -1,8 +1,8 @@
 """added data tables
 
-Revision ID: 010e6c2987be
+Revision ID: 37e4a30e62dc
 Revises: 
-Create Date: 2025-11-23 10:35:33.700123
+Create Date: 2025-11-24 17:25:00.242123
 
 """
 from typing import Sequence, Union
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '010e6c2987be'
+revision: str = '37e4a30e62dc'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -42,7 +42,8 @@ def upgrade() -> None:
     )
     op.create_table('variable_table',
     sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('name', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.Column('var_name', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+    sa.Column('var_label', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('year_table',

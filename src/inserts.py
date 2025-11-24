@@ -13,6 +13,7 @@ class data_inserts(data_pull):
     ):
         super().__init__(saving_dir, db_file, log_file)
         self.insert_geo_missing()
+        self.insert_var_missing()
 
         self.data = self.pull_urls()
 
@@ -159,6 +160,21 @@ class data_inserts(data_pull):
                     (id, geo_name, geo_lv) VALUES (1, 'missing','missing');
             """)
 
+    def insert_var_missing(self) -> None:
+        query = self.conn.execute(
+            """
+            SELECT * FROM sqlite_db.variable_table
+                WHERE id=1;
+            """
+        ).fetchone()
+        if query is None:
+            self.conn.execute(
+                """
+                INSERT INTO sqlite_db.variable_table
+                    (id, var_name, var_label) VALUES (1, 'missing','missing');
+                """
+            )
+
     def insert_geo_full(self) -> None:
         for url in self.data.select("c_geographyLink").to_series().to_list():
             if url.split("/")[4] == "timeseries":
@@ -230,17 +246,25 @@ class data_inserts(data_pull):
                     )
                     print(f"inserted {dataset_id}  {geo_id} {year_id} succesfully")
 
-    def insert_var_interm(self, dataset_id: int, var_id: int, year_id: int) -> None:
-        self.conn.execute(f"""
-            INSERT INTO sqlite_db.var_interm
-                (dataset_id, var_id, year_id) VALUES ({dataset_id}, {var_id}, {year_id});
-        """)
+    def insert_variable_interm(
+        self, dataset_id: int, var_id: int, year_id: int
+    ) -> None:
+        self.conn.execute(
+            """
+            INSERT INTO sqlite_db.variable_interm
+                (dataset_id, var_id, year_id) VALUES (?,?,?);
+            """,
+            (dataset_id, var_id, year_id),
+        )
 
-    def insert_var_item(self, var_name: str, var_desc: str) -> None:
-        self.conn.execute(f"""
-                        INSERT INTO sqlite_db.geo_table
-                            (var_name, var_desc) VALUES ('{var_name}', '{var_desc}');
-                    """)
+    def insert_var_item(self, var_name: str, var_label: str) -> None:
+        self.conn.execute(
+            """
+            INSERT INTO sqlite_db.variable_table
+                (var_name, var_label) VALUES (?,?);
+            """,
+            (var_name, var_label),
+        )
 
     def insert_var_full(self) -> None:
         for url in self.data.select("c_variablesLink").to_series().to_list():
@@ -261,57 +285,39 @@ class data_inserts(data_pull):
                 continue
 
             print(url)
-            results = requests.get(url).json().get("fips")
+            results = requests.get(url).json().get("variables")
 
-            try:
-                df = pl.DataFrame(results)
-            except SchemaError:
-                clean = [
-                    {k: v for k, v in rec.items() if k != "wildcard"} for rec in results
-                ]
-                df = pl.DataFrame(clean)
+            df = pl.DataFrame([{"name": k, **v} for k, v in results.items()])
 
             if df.is_empty():
-                self.insert_geo_interm(dataset_id=dataset_id, year_id=year_id, geo_id=1)
+                self.insert_variable_interm(
+                    dataset_id=dataset_id, year_id=year_id, var_id=1
+                )
                 print("inserted empty data")
                 continue
 
-            if "geoLevelId" not in df.columns and "geoLevelDisplay" not in df.columns:
-                self.insert_geo_interm(dataset_id=dataset_id, year_id=year_id, geo_id=1)
-                print("insert mising data")
-                continue
-
-            if "geoLevelId" in df.columns:
-                df = df.with_columns(geoLevelDisplay=pl.col("geoLevelId"))
-
-            df = df.with_columns(pl.col("geoLevelDisplay").fill_null("-1"))
             for obs in (
-                df.select(pl.col("name") + "_" + pl.col("geoLevelDisplay"))
-                .to_series()
-                .to_list()
+                df.select(pl.col("name") + "@%" + pl.col("label")).to_series().to_list()
             ):
                 print(obs)
-                geo_desc, geo_lv = obs.split("_")
+                var_name, var_label = obs.split("@%")
 
-                if geo_lv == "-1":
-                    geo_lv = self.get_geo_desc(geo_name=geo_desc)
+                if self.get_var_id(var_name=var_name) == -1:
+                    self.insert_var_item(var_name=var_name, var_label=var_label)
+                    print(f"inserted {var_name} into db")
 
-                if self.get_geo_id(geo_lv=geo_lv) == -1:
-                    self.insert_geo_item(geo_desc=geo_desc, geo_lv=geo_lv)
-                    print(f"inserted {geo_desc} into db")
+                var_id = self.get_var_id(var_name=var_name)
 
-                geo_id = self.get_geo_id(geo_lv=geo_lv)
-
-                if self.check_geo_interm_id(
-                    dataset_id=dataset_id, geo_id=geo_id, year_id=year_id
+                if self.check_variable_interm_id(
+                    dataset_id=dataset_id, var_id=var_id, year_id=year_id
                 ):
-                    print(f"Entry {dataset_id}  {geo_id} {year_id} is in dataset")
+                    print(f"Entry {dataset_id}  {var_id} {year_id} is in dataset")
                     continue
                 else:
-                    self.insert_geo_interm(
-                        dataset_id=dataset_id, geo_id=geo_id, year_id=year_id
+                    self.insert_variable_interm(
+                        dataset_id=dataset_id, var_id=var_id, year_id=year_id
                     )
-                    print(f"inserted {dataset_id}  {geo_id} {year_id} succesfully")
+                    print(f"inserted {dataset_id}  {var_id} {year_id} succesfully")
 
     def get_year_id(self, year: int) -> int:
         quary = self.conn.execute(f"""
@@ -356,7 +362,7 @@ class data_inserts(data_pull):
     def get_var_id(self, var_name: str) -> int:
         query = self.conn.execute(f"""
             SELECT *
-                FROM sqlite_db.var_table
+                FROM sqlite_db.variable_table
                 WHERE var_name = '{var_name}';
         """).fetchone()
         if query is None:
@@ -383,19 +389,19 @@ class data_inserts(data_pull):
         else:
             return True
 
-    def check_var_interm_id(
+    def check_variable_interm_id(
         self, dataset_id: int, year_id: int, var_id: int = -1
     ) -> bool:
         if var_id == -1:
             query = self.conn.execute(f"""
             SELECT *
-                FROM sqlite_db.var_interm
+                FROM sqlite_db.variable_interm
                 WHERE dataset_id={dataset_id} AND year_id={year_id};
             """).fetchone()
         else:
             query = self.conn.execute(f"""
             SELECT *
-                FROM sqlite_db.var_interm
+                FROM sqlite_db.variable_interm
                 WHERE dataset_id={dataset_id} AND var_id={var_id} AND year_id={year_id};
             """).fetchone()
         if query is None:

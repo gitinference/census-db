@@ -48,7 +48,8 @@ class geo_table(SQLModel, table=True):
 
 class variable_table(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
-    name: str
+    var_name: str
+    var_label: str
 
 
 class variable_interm(SQLModel, table=True):
