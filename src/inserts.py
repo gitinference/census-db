@@ -163,10 +163,13 @@ class data_inserts(data_pull):
         for url in self.data.select("c_geographyLink").to_series().to_list():
             if url.split("/")[4] == "timeseries":
                 year_id = self.get_year_id(0)
+                dataset_id = self.get_dataset_id(
+                    "timeseries-" + "-".join(url.split("/")[5:-1])
+                )
+
             else:
                 year_id = self.get_year_id(url.split("/")[4])
-
-            dataset_id = self.get_dataset_id("-".join(url.split("/")[5:-1]))
+                dataset_id = self.get_dataset_id("-".join(url.split("/")[5:-1]))
 
             if self.check_geo_interm_id(dataset_id=dataset_id, year_id=year_id):
                 print(

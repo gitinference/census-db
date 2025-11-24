@@ -1,8 +1,10 @@
-from src.pull import data_pull
+from src.inserts import data_inserts
+
+di = data_inserts()
 
 
 def main():
-    data_pull().pull_states()
+    di.insert_geo_full()
 
 
 if __name__ == "__main__":
