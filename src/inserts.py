@@ -138,16 +138,22 @@ class data_inserts(data_pull):
         )
 
     def insert_geo_interm(self, dataset_id: int, geo_id: int, year_id: int) -> None:
-        self.conn.execute(f"""
+        self.conn.execute(
+            """
             INSERT INTO sqlite_db.geo_interm
-                (dataset_id, geo_id, year_id) VALUES ({dataset_id}, {geo_id}, {year_id});
-        """)
+                (dataset_id, geo_id, year_id) VALUES (?,?,?);
+            """,
+            (dataset_id, geo_id, year_id),
+        )
 
     def insert_geo_item(self, geo_desc: str, geo_lv: str) -> None:
-        self.conn.execute(f"""
-                        INSERT INTO sqlite_db.geo_table
-                            (geo_name, geo_lv) VALUES ('{geo_desc}', '{geo_lv}');
-                    """)
+        self.conn.execute(
+            """
+            INSERT INTO sqlite_db.geo_table
+                (geo_name, geo_lv) VALUES (?,?);
+            """,
+            (geo_desc, geo_lv),
+        )
 
     def insert_geo_missing(self) -> None:
         query = self.conn.execute("""
@@ -320,31 +326,48 @@ class data_inserts(data_pull):
                     print(f"inserted {dataset_id}  {var_id} {year_id} succesfully")
 
     def get_year_id(self, year: int) -> int:
-        quary = self.conn.execute(f"""
+        quary = (
+            self.conn.cursor()
+            .execute(
+                """
             SELECT *
                 FROM sqlite_db.year_table
-                WHERE year = {year};
-        """).fetchone()
+                WHERE year = ?;
+        """,
+                (year),
+            )
+            .fetchone()
+        )
         if quary is None:
             raise ValueError(f"No entry found for year {year}")
         return int(quary[0])
 
     def get_dataset_id(self, dataset: str) -> int:
-        query = self.conn.execute(f"""
+        query = (
+            self.conn.cursor()
+            .execute(
+                """
             SELECT *
                 FROM sqlite_db.dataset_table
-                WHERE dataset = '{dataset}';
-        """).fetchone()
+                WHERE dataset = ?;
+        """,
+                (dataset),
+            )
+            .fetchone()
+        )
         if query is None:
             raise ValueError(f"No entry found for dataset {dataset}")
         return int(query[0])
 
     def get_geo_id(self, geo_lv: str) -> int:
-        query = self.conn.execute(f"""
+        query = self.conn.execute(
+            """
             SELECT *
                 FROM sqlite_db.geo_table
-                WHERE geo_lv = '{geo_lv}';
-        """).fetchone()
+                WHERE geo_lv = ?;
+        """,
+            (geo_lv),
+        ).fetchone()
         if query is None:
             return -1
         return int(query[0])
@@ -360,11 +383,14 @@ class data_inserts(data_pull):
         return query[2]
 
     def get_var_id(self, var_name: str) -> int:
-        query = self.conn.execute(f"""
+        query = self.conn.execute(
+            """
             SELECT *
                 FROM sqlite_db.variable_table
-                WHERE var_name = '{var_name}';
-        """).fetchone()
+                WHERE var_name = (?);
+        """,
+            (var_name),
+        ).fetchone()
         if query is None:
             return -1
         return int(query[0])
@@ -373,17 +399,27 @@ class data_inserts(data_pull):
         self, dataset_id: int, year_id: int, geo_id: int = -1
     ) -> bool:
         if geo_id == -1:
-            query = self.conn.execute(f"""
+            query = self.conn.execute(
+                """
             SELECT *
                 FROM sqlite_db.geo_interm
-                WHERE dataset_id={dataset_id} AND year_id={year_id};
-            """).fetchone()
+                WHERE dataset_id=? AND year_id=?;
+            """,
+                (dataset_id, year_id),
+            ).fetchone()
         else:
-            query = self.conn.execute(f"""
+            query = self.conn.execute(
+                """
             SELECT *
                 FROM sqlite_db.geo_interm
-                WHERE dataset_id={dataset_id} AND geo_id={geo_id} AND year_id={year_id};
-            """).fetchone()
+                WHERE dataset_id=? AND geo_id=? AND year_id=?;
+            """,
+                (
+                    dataset_id,
+                    geo_id,
+                    year_id,
+                ),
+            ).fetchone()
         if query is None:
             return False
         else:
@@ -393,17 +429,31 @@ class data_inserts(data_pull):
         self, dataset_id: int, year_id: int, var_id: int = -1
     ) -> bool:
         if var_id == -1:
-            query = self.conn.execute(f"""
+            query = (
+                self.conn.cursor()
+                .execute(
+                    """
             SELECT *
                 FROM sqlite_db.variable_interm
-                WHERE dataset_id={dataset_id} AND year_id={year_id};
-            """).fetchone()
+                WHERE dataset_id=? AND year_id=?;
+            """,
+                    (dataset_id, year_id),
+                )
+                .fetchone()
+            )
         else:
-            query = self.conn.execute(f"""
+            query = (
+                self.conn.cursor()
+                .execute(
+                    """
             SELECT *
                 FROM sqlite_db.variable_interm
-                WHERE dataset_id={dataset_id} AND var_id={var_id} AND year_id={year_id};
-            """).fetchone()
+                WHERE dataset_id=? AND var_id=? AND year_id=?;
+            """,
+                    (dataset_id, var_id, year_id),
+                )
+                .fetchone()
+            )
         if query is None:
             return False
         else:
