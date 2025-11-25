@@ -326,35 +326,27 @@ class data_inserts(data_pull):
                     print(f"inserted {dataset_id}  {var_id} {year_id} succesfully")
 
     def get_year_id(self, year: int) -> int:
-        quary = (
-            self.conn.cursor()
-            .execute(
-                """
+        quary = self.conn.execute(
+            """
             SELECT *
                 FROM sqlite_db.year_table
                 WHERE year = ?;
         """,
-                (year),
-            )
-            .fetchone()
-        )
+            (year,),
+        ).fetchone()
         if quary is None:
             raise ValueError(f"No entry found for year {year}")
         return int(quary[0])
 
     def get_dataset_id(self, dataset: str) -> int:
-        query = (
-            self.conn.cursor()
-            .execute(
-                """
+        query = self.conn.execute(
+            """
             SELECT *
                 FROM sqlite_db.dataset_table
                 WHERE dataset = ?;
         """,
-                (dataset),
-            )
-            .fetchone()
-        )
+            (dataset,),
+        ).fetchone()
         if query is None:
             raise ValueError(f"No entry found for dataset {dataset}")
         return int(query[0])
@@ -429,31 +421,23 @@ class data_inserts(data_pull):
         self, dataset_id: int, year_id: int, var_id: int = -1
     ) -> bool:
         if var_id == -1:
-            query = (
-                self.conn.cursor()
-                .execute(
-                    """
+            query = self.conn.execute(
+                """
             SELECT *
                 FROM sqlite_db.variable_interm
                 WHERE dataset_id=? AND year_id=?;
             """,
-                    (dataset_id, year_id),
-                )
-                .fetchone()
-            )
+                (dataset_id, year_id),
+            ).fetchone()
         else:
-            query = (
-                self.conn.cursor()
-                .execute(
-                    """
+            query = self.conn.execute(
+                """
             SELECT *
                 FROM sqlite_db.variable_interm
                 WHERE dataset_id=? AND var_id=? AND year_id=?;
             """,
-                    (dataset_id, var_id, year_id),
-                )
-                .fetchone()
-            )
+                (dataset_id, var_id, year_id),
+            ).fetchone()
         if query is None:
             return False
         else:
