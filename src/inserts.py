@@ -358,7 +358,7 @@ class data_inserts(data_pull):
                 FROM sqlite_db.geo_table
                 WHERE geo_lv = ?;
         """,
-            (geo_lv),
+            (geo_lv,),
         ).fetchone()
         if query is None:
             return -1
@@ -381,7 +381,7 @@ class data_inserts(data_pull):
                 FROM sqlite_db.variable_table
                 WHERE var_name = (?);
         """,
-            (var_name),
+            (var_name,),
         ).fetchone()
         if query is None:
             return -1
