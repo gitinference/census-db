@@ -286,7 +286,7 @@ class data_inserts(data_pull):
 
             if self.check_geo_interm_id(dataset_id=dataset_id, year_id=year_id):
                 print(
-                    f"Skipping there is data in geo_iterm table for {year_id} {dataset_id}"
+                    f"Skipping there is data in var_iterm table for {year_id} {dataset_id}"
                 )
                 continue
 
