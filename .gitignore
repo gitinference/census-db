@@ -210,3 +210,4 @@ database.db
 *.parquet
 notebooks/*
 !notebooks/*.ipynb
+*.csv
