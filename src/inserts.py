@@ -15,7 +15,7 @@ class data_inserts(data_pull):
         self.insert_geo_missing()
         self.insert_var_missing()
 
-        self.data = self.pull_urls()
+        # self.data = self.pull_urls()
 
     def insert_states(self) -> None:
         gdf = self.pull_geos(
@@ -115,7 +115,9 @@ class data_inserts(data_pull):
         )
 
     def insert_datasets(self) -> None:
-        urls = self.data.unique(subset="dataset", maintain_order=True, keep="last")
+        urls = self.pull_urls().unique(
+            subset="dataset", maintain_order=True, keep="last"
+        )
         urls = urls.with_columns(
             api_url=pl.col("c_variablesLink")
             .str.slice(32)
@@ -129,7 +131,9 @@ class data_inserts(data_pull):
         )
 
     def insert_years(self) -> None:
-        years = self.data.unique(subset="c_vintage", maintain_order=True, keep="last")
+        years = self.pull_urls().unique(
+            subset="c_vintage", maintain_order=True, keep="last"
+        )
         years = years.rename({"c_vintage": "year"})
         years = years.with_columns(pl.col("year").fill_null(0))
         years = years.select("year").sort("year")
@@ -156,15 +160,19 @@ class data_inserts(data_pull):
         )
 
     def insert_geo_missing(self) -> None:
-        query = self.conn.execute("""
+        query = self.conn.execute(
+            """
             SELECT * FROM sqlite_db.geo_table
                 WHERE id=1;
-        """).fetchone()
+        """
+        ).fetchone()
         if query is None:
-            self.conn.execute("""
+            self.conn.execute(
+                """
                 INSERT INTO sqlite_db.geo_table
                     (id, geo_name, geo_lv) VALUES (1, 'missing','missing');
-            """)
+            """
+            )
 
     def insert_var_missing(self) -> None:
         query = self.conn.execute(
@@ -182,7 +190,7 @@ class data_inserts(data_pull):
             )
 
     def insert_geo_full(self) -> None:
-        for url in self.data.select("c_geographyLink").to_series().to_list():
+        for url in self.pull_urls().select("c_geographyLink").to_series().to_list():
             if url.split("/")[4] == "timeseries":
                 year_id = self.get_year_id(0)
                 dataset_id = self.get_dataset_id(
@@ -273,7 +281,7 @@ class data_inserts(data_pull):
         )
 
     def insert_var_full(self) -> None:
-        for url in self.data.select("c_variablesLink").to_series().to_list():
+        for url in self.pull_urls().select("c_variablesLink").to_series().to_list():
             if url.split("/")[4] == "timeseries":
                 year_id = self.get_year_id(0)
                 dataset_id = self.get_dataset_id(
@@ -284,7 +292,7 @@ class data_inserts(data_pull):
                 year_id = self.get_year_id(url.split("/")[4])
                 dataset_id = self.get_dataset_id("-".join(url.split("/")[5:-1]))
 
-            if self.check_geo_interm_id(dataset_id=dataset_id, year_id=year_id):
+            if self.check_variable_interm_id(dataset_id=dataset_id, year_id=year_id):
                 print(
                     f"Skipping there is data in var_iterm table for {year_id} {dataset_id}"
                 )
@@ -302,28 +310,51 @@ class data_inserts(data_pull):
                 print("inserted empty data")
                 continue
 
-            for obs in (
-                df.select(pl.col("name") + "@%" + pl.col("label")).to_series().to_list()
-            ):
-                print(obs)
-                var_name, var_label = obs.split("@%")
+            df = df.select(
+                var_name=pl.col("name"),
+                var_label=pl.col("label"),
+                dataset_id=dataset_id,
+                year_id=year_id,
+            )
 
-                if self.get_var_id(var_name=var_name) == -1:
-                    self.insert_var_item(var_name=var_name, var_label=var_label)
-                    print(f"inserted {var_name} into db")
+            # insert variables not in DB
+            in_db = self.conn.execute(
+                """
+                SELECT var_name FROM sqlite_db.variable_table;
+                """
+            ).pl()
+            db_list = in_db.select(pl.col("var_name")).to_series().to_list()
+            candidate = df.select(pl.col("var_name")).to_series().to_list()
+            insert_db = list(set(candidate) - set(db_list))
 
-                var_id = self.get_var_id(var_name=var_name)
+            if len(insert_db) > 0:
+                data = df.filter(pl.col("var_name").is_in(insert_db))
+                data = data.select(pl.col("var_name", "var_label"))
+                data.write_database(
+                    table_name="variable_table",
+                    if_table_exists="append",
+                    connection=self.db_file,
+                )
+                print(f"Inserted {len(insert_db)} succesfully")
 
-                if self.check_variable_interm_id(
-                    dataset_id=dataset_id, var_id=var_id, year_id=year_id
-                ):
-                    print(f"Entry {dataset_id}  {var_id} {year_id} is in dataset")
-                    continue
-                else:
-                    self.insert_variable_interm(
-                        dataset_id=dataset_id, var_id=var_id, year_id=year_id
-                    )
-                    print(f"inserted {dataset_id}  {var_id} {year_id} succesfully")
+            # insert into intermediate table
+            in_db = (
+                self.conn.execute(
+                    """
+                SELECT id,var_name FROM sqlite_db.variable_table;
+                """
+                )
+                .pl()
+                .rename({"id": "var_id"})
+            )
+            df = df.join(in_db, on=["var_name"], how="left", validate="1:1")
+            df = df.select(["dataset_id", "year_id", "var_id"])
+            df.write_database(
+                table_name="variable_interm",
+                if_table_exists="append",
+                connection=self.db_file,
+            )
+            print(f"inserted {len(df)} succesfully")
 
     def get_year_id(self, year: int) -> int:
         quary = self.conn.execute(
@@ -365,11 +396,13 @@ class data_inserts(data_pull):
         return int(query[0])
 
     def get_geo_desc(self, geo_name: str) -> str:
-        query = self.conn.execute(f"""
+        query = self.conn.execute(
+            f"""
             SELECT *
                 FROM sqlite_db.geo_table
                 WHERE geo_name = '{geo_name}';
-        """).fetchone()
+        """
+        ).fetchone()
         if query is None:
             raise ValueError(f"NO entry with that value {geo_name}")
         return query[2]

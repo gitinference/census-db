@@ -1,0 +1,173 @@
+Table states [headercolor: #175e7a] {
+	id integer [ pk, increment, unique ]
+	region_id integer
+	division_id integer
+	name_abv varchar(255)
+	name_full varchar(255)
+}
+
+Table regions [headercolor: #175e7a] {
+	id integer [ pk, increment, not null, unique ]
+	name_abv varchar(255)
+	name_full varchar(255)
+}
+
+Table divisions [headercolor: #175e7a] {
+	id integer [ pk, increment, not null, unique ]
+	region_id integer
+	name_abv varchar(255)
+	name_full varchar(255)
+}
+
+Table county [headercolor: #175e7a] {
+	id integer [ pk, increment ]
+	state_id integer
+	name_full varchar(255)
+
+	indexes {
+		(id) [ name: 'county_index_0' ]
+	}
+}
+
+Table track [headercolor: #175e7a] {
+	id integer [ pk, increment, not null, unique ]
+	county_id integer
+	state_id integer
+	name_full varchar(255)
+}
+
+Table year_interm [headercolor: #175e7a] {
+	id integer [ pk, increment, not null, unique ]
+	year_id integer
+	interm_id integer
+}
+
+Table geo_interm [headercolor: #175e7a] {
+	id integer [ pk, increment, not null, unique ]
+	geo_id integer
+	interm_id integer
+}
+
+Table geo_table [headercolor: #175e7a] {
+	id integer [ pk, increment, not null, unique ]
+	geo_name varchar(255)
+	geo_url varchar(255)
+}
+
+Table year_table [headercolor: #175e7a] {
+	id integer [ pk, increment, not null, unique ]
+	year integer
+}
+
+Table data [headercolor: #175e7a] {
+	id integer [ pk, increment, not null, unique ]
+	year_interm_id integer
+	type_id integer
+	geo_interm_id integer
+	var_interm_id integer
+}
+
+Table dataset_type [headercolor: #175e7a] {
+	id integer [ pk, increment, not null, unique ]
+	type varchar(255)
+}
+
+Table variable_interm [headercolor: #175e7a] {
+	id integer [ pk, increment, not null, unique ]
+	interm_id integer
+	year_id integer
+	var_id integer
+}
+
+Table variable_table [headercolor: #175e7a] {
+	id integer [ pk, increment, not null, unique ]
+	name varchar(255)
+	label varchar(255)
+	cconcept_id integer
+	required_id integer
+	limit integer
+	predicate_id integer
+}
+
+Table concept_table [headercolor: #175e7a] {
+	id integer [ pk, increment, not null, unique ]
+	name varchar(255)
+}
+
+Table required_table [headercolor: #175e7a] {
+	id integer [ pk, increment, not null, unique ]
+	name varchar(255)
+}
+
+Table predicate_type [headercolor: #175e7a] {
+	id integer [ pk, increment, not null, unique ]
+	predicate_type varchar(255)
+}
+
+Ref "Couty to States Relationship" {
+	county.state_id > states.id [ delete: no action, update: no action ]
+}
+
+Ref "States to Region Relationship" {
+	states.region_id > regions.id [ delete: no action, update: no action ]
+}
+
+Ref "States to Division Relationship" {
+	states.division_id > divisions.id [ delete: no action, update: no action ]
+}
+
+Ref "Division to Regions Relationship" {
+	divisions.region_id > regions.id [ delete: no action, update: no action ]
+}
+
+Ref "Track to county Relationship" {
+	track.county_id > county.id [ delete: no action, update: no action ]
+}
+
+Ref "County to State Relationship" {
+	track.state_id > states.id [ delete: no action, update: no action ]
+}
+
+Ref "year to intermediate Relationship" {
+	data.year_interm_id - year_interm.interm_id [ delete: no action, update: no action ]
+}
+
+Ref fk_data_geo_interm_id_geo_interm {
+	data.geo_interm_id - geo_interm.interm_id [ delete: no action, update: no action ]
+}
+
+Ref fk_geo_interm_geo_id_geo_table {
+	geo_interm.geo_id > geo_table.id [ delete: no action, update: no action ]
+}
+
+Ref fk_year_interm_year_id_year_table {
+	year_interm.year_id > year_table.id [ delete: no action, update: no action ]
+}
+
+Ref fk_data_type_id_dataset_type {
+	data.type_id > dataset_type.id [ delete: no action, update: no action ]
+}
+
+Ref fk_variable_interm_year_id_year_table {
+	variable_interm.year_id > year_table.id [ delete: no action, update: no action ]
+}
+
+Ref fk_variable_table_concept_id_concept_table {
+	variable_table.cconcept_id > concept_table.id [ delete: no action, update: no action ]
+}
+
+Ref fk_variable_table_required_id_required_table {
+	variable_table.required_id > required_table.id [ delete: no action, update: no action ]
+}
+
+Ref fk_variable_interm_var_id_variable_table {
+	variable_interm.var_id > variable_table.id [ delete: no action, update: no action ]
+}
+
+Ref fk_data_var_interm_id_variable_interm {
+	data.var_interm_id - variable_interm.interm_id [ delete: no action, update: no action ]
+}
+
+Ref fk_predicate_type_id_variable_table {
+	predicate_type.id < variable_table.predicate_id [ delete: no action, update: no action ]
+}
