@@ -6,7 +6,7 @@ import duckdb
 import geopandas as gpd
 import polars as pl
 import requests
-from jp_tools import download
+from jp_tools import download, notify
 
 
 class data_pull:
@@ -39,10 +39,7 @@ class data_pull:
     def pull_geos(self, url: str, filename: str) -> gpd.GeoDataFrame:
         if not os.path.exists(filename):
             temp_filename = f"{tempfile.gettempdir()}/{hash(filename)}.zip"
-            download(
-                url=url,
-                filename=temp_filename,
-            )
+            download(url=url, filename=temp_filename, notify=notify)
             gdf = gpd.read_file(temp_filename)
             gdf.to_parquet(filename)
         return gpd.read_parquet(filename)

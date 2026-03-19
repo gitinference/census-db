@@ -1,7 +1,13 @@
-from .pull import data_pull
-import requests
-from polars.exceptions import SchemaError
+import logging
+import os
+
 import polars as pl
+import requests
+from dotenv import load_dotenv
+from jp_tools import notify
+from polars.exceptions import SchemaError
+
+from .pull import data_pull
 
 
 class data_inserts(data_pull):
@@ -14,8 +20,10 @@ class data_inserts(data_pull):
         super().__init__(saving_dir, db_file, log_file)
         self.insert_geo_missing()
         self.insert_var_missing()
+        load_dotenv()
 
         # self.data = self.pull_urls()
+        # INFO: Need to add documentation for the code
 
     def insert_states(self) -> None:
         gdf = self.pull_geos(
@@ -114,7 +122,7 @@ class data_inserts(data_pull):
             table_name="divisions", if_table_exists="append", connection=self.db_file
         )
 
-    def insert_datasets(self) -> None:
+    def insert_datasets(self, notify_flag: bool = False) -> None:
         urls = self.pull_urls().unique(
             subset="dataset", maintain_order=True, keep="last"
         )
@@ -129,6 +137,12 @@ class data_inserts(data_pull):
             if_table_exists="append",
             connection=self.db_file,
         )
+        if notify_flag:
+            notify(
+                url=str(os.environ.get("URL")),
+                auth=str(os.environ.get("AUTH")),
+                msg="Successfully completed inserting Databases",
+            )
 
     def insert_years(self) -> None:
         years = self.pull_urls().unique(
@@ -160,37 +174,31 @@ class data_inserts(data_pull):
         )
 
     def insert_geo_missing(self) -> None:
-        query = self.conn.execute(
-            """
+        query = self.conn.execute("""
             SELECT * FROM sqlite_db.geo_table
                 WHERE id=1;
-        """
-        ).fetchone()
+        """).fetchone()
         if query is None:
-            self.conn.execute(
-                """
+            self.conn.execute("""
                 INSERT INTO sqlite_db.geo_table
                     (id, geo_name, geo_lv) VALUES (1, 'missing','missing');
-            """
-            )
+            """)
 
     def insert_var_missing(self) -> None:
-        query = self.conn.execute(
-            """
+        query = self.conn.execute("""
             SELECT * FROM sqlite_db.variable_table
                 WHERE id=1;
-            """
-        ).fetchone()
+            """).fetchone()
         if query is None:
-            self.conn.execute(
-                """
+            self.conn.execute("""
                 INSERT INTO sqlite_db.variable_table
                     (id, var_name, var_label) VALUES (1, 'missing','missing');
-                """
-            )
+                """)
 
-    def insert_geo_full(self) -> None:
+    def insert_geo_full(self, notify_flag: bool = False) -> None:
+        # Loop to go through all available years and get their geografies
         for url in self.pull_urls().select("c_geographyLink").to_series().to_list():
+            # special case for timeseries data
             if url.split("/")[4] == "timeseries":
                 year_id = self.get_year_id(0)
                 dataset_id = self.get_dataset_id(
@@ -202,12 +210,12 @@ class data_inserts(data_pull):
                 dataset_id = self.get_dataset_id("-".join(url.split("/")[5:-1]))
 
             if self.check_geo_interm_id(dataset_id=dataset_id, year_id=year_id):
-                print(
+                logging.debug(
                     f"Skipping there is data in geo_iterm table for {year_id} {dataset_id}"
                 )
                 continue
 
-            print(url)
+            # get all fips code for the available states
             results = requests.get(url).json().get("fips")
 
             try:
@@ -220,12 +228,13 @@ class data_inserts(data_pull):
 
             if df.is_empty():
                 self.insert_geo_interm(dataset_id=dataset_id, year_id=year_id, geo_id=1)
-                print("inserted empty data")
+                logging.debug("inserted empty data")
                 continue
 
+            # registering of missing data & search from drataframe to get the needed data
             if "geoLevelId" not in df.columns and "geoLevelDisplay" not in df.columns:
                 self.insert_geo_interm(dataset_id=dataset_id, year_id=year_id, geo_id=1)
-                print("insert mising data")
+                logging.debug("insert mising data")
                 continue
 
             if "geoLevelId" in df.columns:
@@ -237,7 +246,6 @@ class data_inserts(data_pull):
                 .to_series()
                 .to_list()
             ):
-                print(obs)
                 geo_desc, geo_lv = obs.split("_")
 
                 if geo_lv == "-1":
@@ -245,20 +253,31 @@ class data_inserts(data_pull):
 
                 if self.get_geo_id(geo_lv=geo_lv) == -1:
                     self.insert_geo_item(geo_desc=geo_desc, geo_lv=geo_lv)
-                    print(f"inserted {geo_desc} into db")
+                    logging.debug(f"inserted {geo_desc} into db")
 
                 geo_id = self.get_geo_id(geo_lv=geo_lv)
 
                 if self.check_geo_interm_id(
                     dataset_id=dataset_id, geo_id=geo_id, year_id=year_id
                 ):
-                    print(f"Entry {dataset_id}  {geo_id} {year_id} is in dataset")
+                    logging.debug(
+                        f"Entry {dataset_id}  {geo_id} {year_id} is in dataset"
+                    )
                     continue
                 else:
                     self.insert_geo_interm(
                         dataset_id=dataset_id, geo_id=geo_id, year_id=year_id
                     )
-                    print(f"inserted {dataset_id}  {geo_id} {year_id} succesfully")
+                    logging.debug(
+                        f"inserted {dataset_id}  {geo_id} {year_id} succesfully"
+                    )
+
+        if notify_flag:
+            notify(
+                url=str(os.environ.get("URL")),
+                auth=str(os.environ.get("AUTH")),
+                msg="Successfully completed inserting intermediate Geografies",
+            )
 
     def insert_variable_interm(
         self, dataset_id: int, var_id: int, year_id: int
@@ -280,7 +299,7 @@ class data_inserts(data_pull):
             (var_name, var_label),
         )
 
-    def insert_var_full(self) -> None:
+    def insert_var_full(self, notify_flag: bool = False) -> None:
         for url in self.pull_urls().select("c_variablesLink").to_series().to_list():
             if url.split("/")[4] == "timeseries":
                 year_id = self.get_year_id(0)
@@ -293,12 +312,12 @@ class data_inserts(data_pull):
                 dataset_id = self.get_dataset_id("-".join(url.split("/")[5:-1]))
 
             if self.check_variable_interm_id(dataset_id=dataset_id, year_id=year_id):
-                print(
+                logging.debug(
                     f"Skipping there is data in var_iterm table for {year_id} {dataset_id}"
                 )
                 continue
 
-            print(url)
+            logging.debug(url)
             results = requests.get(url).json().get("variables")
 
             df = pl.DataFrame([{"name": k, **v} for k, v in results.items()])
@@ -307,7 +326,7 @@ class data_inserts(data_pull):
                 self.insert_variable_interm(
                     dataset_id=dataset_id, year_id=year_id, var_id=1
                 )
-                print("inserted empty data")
+                logging.debug("inserted empty data")
                 continue
 
             df = df.select(
@@ -318,11 +337,9 @@ class data_inserts(data_pull):
             )
 
             # insert variables not in DB
-            in_db = self.conn.execute(
-                """
+            in_db = self.conn.execute("""
                 SELECT var_name FROM sqlite_db.variable_table;
-                """
-            ).pl()
+                """).pl()
             db_list = in_db.select(pl.col("var_name")).to_series().to_list()
             candidate = df.select(pl.col("var_name")).to_series().to_list()
             insert_db = list(set(candidate) - set(db_list))
@@ -335,18 +352,12 @@ class data_inserts(data_pull):
                     if_table_exists="append",
                     connection=self.db_file,
                 )
-                print(f"Inserted {len(insert_db)} succesfully")
+                logging.debug(f"Inserted {len(insert_db)} succesfully")
 
             # insert into intermediate table
-            in_db = (
-                self.conn.execute(
-                    """
+            in_db = self.conn.execute("""
                 SELECT id,var_name FROM sqlite_db.variable_table;
-                """
-                )
-                .pl()
-                .rename({"id": "var_id"})
-            )
+                """).pl().rename({"id": "var_id"})
             df = df.join(in_db, on=["var_name"], how="left", validate="1:1")
             df = df.select(["dataset_id", "year_id", "var_id"])
             df.write_database(
@@ -354,7 +365,14 @@ class data_inserts(data_pull):
                 if_table_exists="append",
                 connection=self.db_file,
             )
-            print(f"inserted {len(df)} succesfully")
+            logging.debug(f"inserted {len(df)} succesfully")
+
+        if notify_flag:
+            notify(
+                url=str(os.environ.get("URL")),
+                auth=str(os.environ.get("AUTH")),
+                msg="Successfully completed inserting intermediate Geografies",
+            )
 
     def get_year_id(self, year: int) -> int:
         quary = self.conn.execute(
@@ -396,13 +414,11 @@ class data_inserts(data_pull):
         return int(query[0])
 
     def get_geo_desc(self, geo_name: str) -> str:
-        query = self.conn.execute(
-            f"""
+        query = self.conn.execute(f"""
             SELECT *
                 FROM sqlite_db.geo_table
                 WHERE geo_name = '{geo_name}';
-        """
-        ).fetchone()
+        """).fetchone()
         if query is None:
             raise ValueError(f"NO entry with that value {geo_name}")
         return query[2]
