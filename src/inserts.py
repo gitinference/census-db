@@ -128,7 +128,7 @@ class data_inserts(data_pull):
         )
         urls = urls.with_columns(
             api_url=pl.col("c_variablesLink")
-            .str.slice(32)
+            .str.replace(r"http://api.census.gov/data/(\d{4}|timeseries)/", "")
             .str.replace("variables.json", ""),
         ).select("dataset", "api_url")
 
