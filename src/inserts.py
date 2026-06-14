@@ -120,7 +120,7 @@ class data_inserts(data_pull):
         )
         urls = urls.with_columns(
             api_url=pl.col("c_variablesLink")
-            .str.slice(32)
+            .str.replace(r"http://api\.census\.gov/data/(?:\d+|timeseries)/", "")
             .str.replace("variables.json", ""),
         ).select("dataset", "api_url")
 
@@ -160,34 +160,26 @@ class data_inserts(data_pull):
         )
 
     def insert_geo_missing(self) -> None:
-        query = self.conn.execute(
-            """
+        query = self.conn.execute("""
             SELECT * FROM sqlite_db.geo_table
                 WHERE id=1;
-        """
-        ).fetchone()
+        """).fetchone()
         if query is None:
-            self.conn.execute(
-                """
+            self.conn.execute("""
                 INSERT INTO sqlite_db.geo_table
                     (id, geo_name, geo_lv) VALUES (1, 'missing','missing');
-            """
-            )
+            """)
 
     def insert_var_missing(self) -> None:
-        query = self.conn.execute(
-            """
+        query = self.conn.execute("""
             SELECT * FROM sqlite_db.variable_table
                 WHERE id=1;
-            """
-        ).fetchone()
+            """).fetchone()
         if query is None:
-            self.conn.execute(
-                """
+            self.conn.execute("""
                 INSERT INTO sqlite_db.variable_table
                     (id, var_name, var_label) VALUES (1, 'missing','missing');
-                """
-            )
+                """)
 
     def insert_geo_full(self) -> None:
         for url in self.pull_urls().select("c_geographyLink").to_series().to_list():
@@ -318,11 +310,9 @@ class data_inserts(data_pull):
             )
 
             # insert variables not in DB
-            in_db = self.conn.execute(
-                """
+            in_db = self.conn.execute("""
                 SELECT var_name FROM sqlite_db.variable_table;
-                """
-            ).pl()
+                """).pl()
             db_list = in_db.select(pl.col("var_name")).to_series().to_list()
             candidate = df.select(pl.col("var_name")).to_series().to_list()
             insert_db = list(set(candidate) - set(db_list))
@@ -338,15 +328,9 @@ class data_inserts(data_pull):
                 print(f"Inserted {len(insert_db)} succesfully")
 
             # insert into intermediate table
-            in_db = (
-                self.conn.execute(
-                    """
+            in_db = self.conn.execute("""
                 SELECT id,var_name FROM sqlite_db.variable_table;
-                """
-                )
-                .pl()
-                .rename({"id": "var_id"})
-            )
+                """).pl().rename({"id": "var_id"})
             df = df.join(in_db, on=["var_name"], how="left", validate="1:1")
             df = df.select(["dataset_id", "year_id", "var_id"])
             df.write_database(
@@ -396,13 +380,11 @@ class data_inserts(data_pull):
         return int(query[0])
 
     def get_geo_desc(self, geo_name: str) -> str:
-        query = self.conn.execute(
-            f"""
+        query = self.conn.execute(f"""
             SELECT *
                 FROM sqlite_db.geo_table
                 WHERE geo_name = '{geo_name}';
-        """
-        ).fetchone()
+        """).fetchone()
         if query is None:
             raise ValueError(f"NO entry with that value {geo_name}")
         return query[2]
