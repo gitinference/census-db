@@ -1,6 +1,11 @@
 # Census API → SQLite Mapping
 
-_A complete system for harvesting, normalizing, and storing U.S. Census API metadata & geographies into a relational SQLite database.This has the purpose 
+# README
+
+> [!IMPORTANT]  
+> Project development has moved to [Codeberg](https://codeberg.org/gitinference/census-db)
+
+_A complete system for harvesting, normalizing, and storing U.S. Census API metadata & geographies into a relational SQLite database.This has the purpose
 of creating a sql database for faster quary building_
 
 ---
@@ -116,6 +121,7 @@ These ensure:
 ```bash
 pip install polars requests duckdb geopandas alembic
 ```
+
 or using `uv`
 
 ```bash
@@ -169,3 +175,4 @@ di.conn.execute(
 ```
 
 This will return a `pd.DataFrame`
+
